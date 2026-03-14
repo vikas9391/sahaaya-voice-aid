@@ -1,17 +1,9 @@
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Home, Heart, BookOpen, Wheat, ArrowRight, Users, MapPin, Award } from 'lucide-react';
+import { Mic, Home, Heart, BookOpen, Wheat, ArrowRight, Users, MapPin, Award, Briefcase } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useLanguage, LANGUAGES } from '@/contexts/LanguageContext';
 import heroImage from '@/assets/hero-illustration.jpg';
-
-const LANGUAGES = [
-  { code: 'hi', label: 'हिन्दी' },
-  { code: 'en', label: 'English' },
-  { code: 'ta', label: 'தமிழ்' },
-  { code: 'te', label: 'తెలుగు' },
-  { code: 'bn', label: 'বাংলা' },
-  { code: 'mr', label: 'मराठी' },
-];
 
 function AnimatedCounter({ target, duration = 2000 }: { target: number; duration?: number }) {
   const [count, setCount] = useState(0);
@@ -30,13 +22,13 @@ function AnimatedCounter({ target, duration = 2000 }: { target: number; duration
 
 const Index = () => {
   const navigate = useNavigate();
-  const [selectedLang, setSelectedLang] = useState('hi');
+  const { lang, setLang, t } = useLanguage();
 
   const handleDemo = () => {
     localStorage.setItem('sahaaya_user', JSON.stringify({
       id: 'demo-001', name: 'राम कुमार', district: 'वाराणसी', state: 'उत्तर प्रदेश',
       occupation: 'किसान', family_size: 5, monthly_income: 8000,
-      has_disability: false, has_bpl_card: true, language: 'hi',
+      has_disability: false, has_bpl_card: true, language: lang,
       created_at: new Date().toISOString(), schemes_matched: 7,
     }));
     navigate('/profile');
@@ -55,16 +47,16 @@ const Index = () => {
           </div>
           <div className="flex items-center gap-2">
             <select
-              value={selectedLang}
-              onChange={e => setSelectedLang(e.target.value)}
+              value={lang}
+              onChange={e => setLang(e.target.value as any)}
               className="text-sm bg-muted rounded-button px-3 py-1.5 border-0 text-foreground focus:ring-2 focus:ring-primary"
             >
               {LANGUAGES.map(l => (
-                <option key={l.code} value={l.code}>{l.label}</option>
+                <option key={l.code} value={l.code}>{l.nativeLabel}</option>
               ))}
             </select>
             <button onClick={() => navigate('/admin')} className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5">
-              Admin
+              {t.admin}
             </button>
           </div>
         </div>
@@ -79,13 +71,13 @@ const Index = () => {
             transition={{ duration: 0.6 }}
           >
             <h1 className="text-4xl md:text-6xl font-extrabold text-secondary leading-tight mb-4">
-              अपना हक़ पाएं
+              {t.heroTitle}
             </h1>
             <p className="text-lg md:text-xl text-muted-foreground mb-2">
-              Get Your Rights — Voice-powered welfare assistance
+              {t.heroSubtitle}
             </p>
             <p className="text-base text-muted-foreground mb-8 max-w-md">
-              बस बोलिये, और Sahaaya AI आपके लिए सरकारी योजनाएं, नौकरी, और सहायता केंद्र खोजेगा।
+              {t.heroDescription}
             </p>
             <div className="flex flex-wrap gap-3">
               <motion.button
@@ -95,7 +87,7 @@ const Index = () => {
                 className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-8 py-4 rounded-button text-lg font-semibold shadow-primary-glow hover:opacity-90 transition-opacity"
               >
                 <Mic className="w-5 h-5" />
-                रजिस्टर करें
+                {t.registerCTA}
                 <ArrowRight className="w-5 h-5" />
               </motion.button>
               <motion.button
@@ -104,7 +96,7 @@ const Index = () => {
                 onClick={handleDemo}
                 className="inline-flex items-center gap-2 bg-secondary text-secondary-foreground px-6 py-4 rounded-button text-lg font-semibold shadow-warm hover:opacity-90 transition-opacity"
               >
-                Demo Mode
+                {t.demoMode}
               </motion.button>
             </div>
           </motion.div>
@@ -123,9 +115,9 @@ const Index = () => {
       <section className="bg-secondary py-10">
         <div className="container grid grid-cols-3 gap-4 text-center">
           {[
-            { icon: Award, label: 'योजनाएं / Schemes', value: 150 },
-            { icon: Users, label: 'लोगों की मदद / Users Helped', value: 25000 },
-            { icon: MapPin, label: 'राज्य / States Covered', value: 28 },
+            { icon: Award, label: t.schemesAvailable, value: 150 },
+            { icon: Users, label: t.usersHelped, value: 25000 },
+            { icon: MapPin, label: t.statesCovered, value: 28 },
           ].map((s, i) => (
             <motion.div
               key={i}
@@ -148,13 +140,13 @@ const Index = () => {
       {/* How it works */}
       <section className="container py-16">
         <h2 className="text-2xl md:text-3xl font-bold text-secondary text-center mb-10">
-          कैसे काम करता है? / How It Works
+          {t.howItWorks}
         </h2>
         <div className="grid md:grid-cols-3 gap-6">
           {[
-            { icon: Mic, title: 'बोलिये / Speak', desc: 'माइक बटन दबाएं और अपनी जानकारी बोलें। AI आपसे हिंदी में बात करेगा।' },
-            { icon: Users, title: 'प्रोफ़ाइल / Profile', desc: 'आपका प्रोफ़ाइल बनेगा और QR कोड मिलेगा जो कहीं भी दिखा सकते हैं।' },
-            { icon: Award, title: 'योजनाएं / Get Matched', desc: 'AI आपके लिए सही सरकारी योजनाएं, नौकरी और सहायता केंद्र खोजेगा।' },
+            { icon: Mic, title: t.stepSpeak, desc: t.stepSpeakDesc },
+            { icon: Users, title: t.stepProfile, desc: t.stepProfileDesc },
+            { icon: Award, title: t.stepMatch, desc: t.stepMatchDesc },
           ].map((item, i) => (
             <motion.div
               key={i}
@@ -177,15 +169,15 @@ const Index = () => {
       {/* Categories */}
       <section className="container pb-16">
         <h2 className="text-2xl md:text-3xl font-bold text-secondary text-center mb-8">
-          हम कैसे मदद करते हैं / What We Cover
+          {t.whatWeCover}
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { icon: Wheat, label: 'खाद्य / Food', color: 'bg-primary/10 text-primary' },
-            { icon: Home, label: 'आवास / Housing', color: 'bg-secondary/10 text-secondary' },
-            { icon: Heart, label: 'स्वास्थ्य / Health', color: 'bg-success/10 text-success' },
-            { icon: BookOpen, label: 'शिक्षा / Education', color: 'bg-warning/10 text-warning' },
-            { icon: Users, label: 'रोज़गार / Jobs', color: 'bg-primary/10 text-primary' },
+            { icon: Wheat, label: t.food, color: 'bg-primary/10 text-primary' },
+            { icon: Home, label: t.housing, color: 'bg-secondary/10 text-secondary' },
+            { icon: Heart, label: t.health, color: 'bg-success/10 text-success' },
+            { icon: BookOpen, label: t.education, color: 'bg-warning/10 text-warning' },
+            { icon: Briefcase, label: t.jobs, color: 'bg-primary/10 text-primary' },
           ].map((c, i) => (
             <motion.div
               key={i}
@@ -204,9 +196,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="bg-secondary py-8">
         <div className="container text-center">
-          <p className="text-secondary-foreground/70 text-sm">
-            © 2026 Sahaaya AI — सबके लिए सहायता | Built for India 🇮🇳
-          </p>
+          <p className="text-secondary-foreground/70 text-sm">{t.footer}</p>
         </div>
       </footer>
     </div>
