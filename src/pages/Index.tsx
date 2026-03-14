@@ -4,6 +4,7 @@ import { Mic, Home, Heart, BookOpen, Wheat, ArrowRight, Users, MapPin, Award, Br
 import { useState, useEffect } from 'react';
 import { useLanguage, LANGUAGES } from '@/contexts/LanguageContext';
 import heroImage from '@/assets/hero-illustration.jpg';
+import WelcomeBot from '@/components/WelcomeBot';
 
 function AnimatedCounter({ target, duration = 2000 }: { target: number; duration?: number }) {
   const [count, setCount] = useState(0);
@@ -36,6 +37,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Welcome Bot - auto-launches */}
+      <WelcomeBot />
       {/* Nav */}
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="container flex items-center justify-between h-16">
