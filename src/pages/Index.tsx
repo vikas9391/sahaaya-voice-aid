@@ -4,6 +4,7 @@ import { Mic, Home, Heart, BookOpen, Wheat, ArrowRight, Users, MapPin, Award, Br
 import { useState, useEffect } from 'react';
 import { useLanguage, LANGUAGES } from '@/contexts/LanguageContext';
 import heroImage from '@/assets/hero-illustration.jpg';
+import WelcomeBot from '@/components/WelcomeBot';
 
 function AnimatedCounter({ target, duration = 2000 }: { target: number; duration?: number }) {
   const [count, setCount] = useState(0);
