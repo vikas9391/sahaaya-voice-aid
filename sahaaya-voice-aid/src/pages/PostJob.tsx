@@ -1,5 +1,5 @@
 // src/pages/PostJob.tsx
-// Updated: submits job to backend API → saves to Supabase
+// Submits job directly to backend → Supabase. No mock data.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -7,14 +7,19 @@ import { Briefcase, ChevronLeft, CheckCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const SECTORS = ['construction', 'farming', 'delivery', 'domestic', 'security', 'other'];
+
+const SECTORS = [
+  'construction', 'farming', 'delivery', 'domestic',
+  'security', 'manufacturing', 'retail', 'hospitality', 'other',
+];
 
 const PostJob = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error,     setError]     = useState('');
   const [form, setForm] = useState({
     title: '', employer_name: '', district: '', state: '',
     daily_wage: '', sector: 'construction', contact_number: '', description: '',
@@ -24,7 +29,6 @@ const PostJob = () => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-
     try {
       const res = await fetch(`${API_URL}/api/jobs`, {
         method: 'POST',
@@ -32,7 +36,7 @@ const PostJob = () => {
         body: JSON.stringify({
           ...form,
           daily_wage: parseInt(form.daily_wage) || 0,
-          is_active: true,
+          is_active:  true,
         }),
       });
       const data = await res.json();
@@ -42,29 +46,32 @@ const PostJob = () => {
         throw new Error(data.error || 'Failed to post job');
       }
     } catch (err: any) {
-      console.error('Post job error:', err);
       setError(err.message || 'Could not post job. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const resetForm = () => {
+    setSubmitted(false);
+    setForm({ title: '', employer_name: '', district: '', state: '', daily_wage: '', sector: 'construction', contact_number: '', description: '' });
+  };
+
   if (submitted) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center">
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center max-w-sm">
           <CheckCircle className="w-16 h-16 text-success mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-secondary mb-2">{t.jobPosted}</h2>
-          <p className="text-muted-foreground mb-6">{t.jobPostedDesc}</p>
+          <h2 className="text-2xl font-bold text-secondary mb-2">{t.jobPosted || 'Job Posted!'}</h2>
+          <p className="text-muted-foreground mb-6">{t.jobPostedDesc || 'Workers in the area will be able to see this listing.'}</p>
           <div className="flex gap-3 justify-center">
-            <button onClick={() => {
-              setSubmitted(false);
-              setForm({ title: '', employer_name: '', district: '', state: '', daily_wage: '', sector: 'construction', contact_number: '', description: '' });
-            }} className="bg-primary text-primary-foreground px-6 py-2 rounded-button font-medium">
-              {t.postAnother}
+            <button onClick={resetForm}
+              className="bg-primary text-primary-foreground px-6 py-2 rounded-button font-medium hover:opacity-90 transition">
+              {t.postAnother || 'Post Another'}
             </button>
-            <button onClick={() => navigate('/')} className="bg-muted text-foreground px-6 py-2 rounded-button font-medium">
-              {t.home}
+            <button onClick={() => navigate('/')}
+              className="bg-muted text-foreground px-6 py-2 rounded-button font-medium hover:bg-muted/80 transition">
+              {t.home || 'Home'}
             </button>
           </div>
         </motion.div>
@@ -72,29 +79,31 @@ const PostJob = () => {
     );
   }
 
-  const fields = [
-    { key: 'title',          label: t.jobTitle,       type: 'text'   },
-    { key: 'employer_name',  label: t.employerName,   type: 'text'   },
-    { key: 'district',       label: t.district,       type: 'text'   },
-    { key: 'state',          label: t.state,          type: 'text'   },
-    { key: 'daily_wage',     label: t.dailyWage,      type: 'number' },
-    { key: 'contact_number', label: t.contactNumber,  type: 'tel'    },
+  const fields: { key: keyof typeof form; label: string; type: string; required?: boolean }[] = [
+    { key: 'title',          label: t.jobTitle      || 'Job Title',       type: 'text',   required: true  },
+    { key: 'employer_name',  label: t.employerName  || 'Employer Name',   type: 'text',   required: true  },
+    { key: 'district',       label: t.district      || 'District',        type: 'text',   required: true  },
+    { key: 'state',          label: t.state         || 'State',           type: 'text',   required: true  },
+    { key: 'daily_wage',     label: t.dailyWage     || 'Daily Wage (₹)',  type: 'number', required: true  },
+    { key: 'contact_number', label: t.contactNumber || 'Contact Number',  type: 'tel',    required: true  },
   ];
 
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="max-w-lg mx-auto">
-        <button onClick={() => navigate(-1)} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-6">
-          <ChevronLeft className="w-4 h-4" /> {t.back}
+        <button onClick={() => navigate(-1)}
+          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-6">
+          <ChevronLeft className="w-4 h-4" /> {t.back || 'Back'}
         </button>
+
         <div className="bg-card rounded-card p-6 shadow-card">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <Briefcase className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-secondary">{t.postJobTitle}</h1>
-              <p className="text-xs text-muted-foreground">{t.postJobSubtitle}</p>
+              <h1 className="text-xl font-bold text-secondary">{t.postJobTitle || 'Post a Job'}</h1>
+              <p className="text-xs text-muted-foreground">{t.postJobSubtitle || 'Connect with workers in your area'}</p>
             </div>
           </div>
 
@@ -102,25 +111,32 @@ const PostJob = () => {
             {fields.map(f => (
               <div key={f.key}>
                 <label className="text-sm font-medium text-foreground mb-1 block">{f.label}</label>
-                <input type={f.type} required value={(form as any)[f.key]}
+                <input
+                  type={f.type}
+                  required={f.required}
+                  value={form[f.key]}
                   onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                  className="w-full bg-background border border-border rounded-button px-4 py-2.5 text-foreground focus:ring-2 focus:ring-primary focus:outline-none text-sm" />
+                  className="w-full bg-background border border-border rounded-button px-4 py-2.5 text-foreground focus:ring-2 focus:ring-primary focus:outline-none text-sm"
+                />
               </div>
             ))}
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">{t.sector}</label>
-              <select value={form.sector} onChange={e => setForm(prev => ({ ...prev, sector: e.target.value }))}
+              <label className="text-sm font-medium text-foreground mb-1 block">{t.sector || 'Sector'}</label>
+              <select value={form.sector}
+                onChange={e => setForm(prev => ({ ...prev, sector: e.target.value }))}
                 className="w-full bg-background border border-border rounded-button px-4 py-2.5 text-foreground focus:ring-2 focus:ring-primary focus:outline-none text-sm">
-                {SECTORS.map(s => <option key={s} value={s}>{s}</option>)}
+                {SECTORS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
               </select>
             </div>
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">{t.description}</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">{t.description || 'Description'}</label>
               <textarea rows={3} value={form.description}
                 onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full bg-background border border-border rounded-button px-4 py-2.5 text-foreground focus:ring-2 focus:ring-primary focus:outline-none text-sm resize-none" />
+                placeholder="Describe the work, experience needed, timings…"
+                className="w-full bg-background border border-border rounded-button px-4 py-2.5 text-foreground focus:ring-2 focus:ring-primary focus:outline-none text-sm resize-none"
+              />
             </div>
 
             {error && (
@@ -129,9 +145,9 @@ const PostJob = () => {
 
             <button type="submit" disabled={isLoading}
               className="w-full bg-primary text-primary-foreground py-3 rounded-button font-medium text-base hover:opacity-90 transition disabled:opacity-60 flex items-center justify-center gap-2">
-              {isLoading ? (
-                <><Loader2 className="w-5 h-5 animate-spin" /> Posting...</>
-              ) : t.postJobBtn}
+              {isLoading
+                ? <><Loader2 className="w-5 h-5 animate-spin" /> Posting...</>
+                : (t.postJobBtn || 'Post Job')}
             </button>
           </form>
         </div>

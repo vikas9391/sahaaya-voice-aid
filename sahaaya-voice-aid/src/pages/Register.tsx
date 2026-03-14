@@ -1,343 +1,266 @@
-// src/pages/Profile.tsx
-// Updated: loads real schemes from backend API + real jobs + aid centers
-import { useState, useEffect, useRef } from 'react';
+// src/pages/Register.tsx
+// Voice registration — no mock data imports, saves to real backend
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { QRCodeSVG } from 'qrcode.react';
-import { Download, ExternalLink, Phone, MapPin, Filter, Briefcase, Heart, Home, BookOpen, Wheat, ChevronLeft, Loader2 } from 'lucide-react';
-import { type UserProfile, type Scheme, type Job, type AidCenter, JOBS, AID_CENTERS } from '@/data/mockData';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Mic, MicOff, ArrowRight, Keyboard, Check } from 'lucide-react';
+import { useVoiceRegistration } from '@/hooks/useVoiceRegistration';
 import { useLanguage } from '@/contexts/LanguageContext';
-import MapView from '@/components/MapView';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-type TabKey = 'schemes' | 'jobs' | 'aid';
-type SchemeFilter = 'all' | 'central' | 'food' | 'housing' | 'health' | 'education' | 'employment';
-
-const CATEGORY_ICONS: Record<string, any> = {
-  food: Wheat, housing: Home, health: Heart, education: BookOpen, employment: Briefcase,
-};
-
-const Profile = () => {
+const Register = () => {
   const navigate = useNavigate();
-  const { t } = useLanguage();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('schemes');
-  const [schemeFilter, setSchemeFilter] = useState<SchemeFilter>('all');
-  const [matchedSchemes, setMatchedSchemes] = useState<Scheme[]>([]);
-  const [jobs, setJobs] = useState<Job[]>(JOBS); // start with mock, replace with real
-  const [aidCenters, setAidCenters] = useState<AidCenter[]>(AID_CENTERS);
-  const [loadingSchemes, setLoadingSchemes] = useState(false);
-  const [loadingJobs, setLoadingJobs] = useState(false);
-  const [loadingAid, setLoadingAid] = useState(false);
-  const qrRef = useRef<HTMLDivElement>(null);
+  const { t, lang } = useLanguage();
+  const {
+    step, currentQuestion, totalQuestions, answers,
+    isListening, isSpeaking, transcript, isComplete, error,
+    startListening, stopListening, submitAnswer, askCurrentQuestion,
+  } = useVoiceRegistration();
 
-  // Load user + schemes
+  const [showTextForm, setShowTextForm] = useState(false);
+  const [textInput,   setTextInput]    = useState('');
+  const [isLoading,   setIsLoading]    = useState(false);
+
+  // ── When voice registration completes, save to backend ───────────────────────
   useEffect(() => {
-    const saved = localStorage.getItem('sahaaya_user');
-    if (!saved) { navigate('/'); return; }
-    const u = JSON.parse(saved) as UserProfile;
-    setUser(u);
+    if (!isComplete) return;
+    setIsLoading(true);
 
-    // Try cached schemes first (set by Register.tsx)
-    const cachedSchemes = localStorage.getItem('sahaaya_schemes');
-    if (cachedSchemes) {
-      try {
-        setMatchedSchemes(JSON.parse(cachedSchemes));
-        return;
-      } catch {}
-    }
-
-    // Fetch from backend if no cache
-    fetchSchemes(u);
-  }, [navigate]);
-
-  const fetchSchemes = async (u: UserProfile) => {
-    setLoadingSchemes(true);
-    try {
-      const res = await fetch(`${API_URL}/api/match-schemes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile: u }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMatchedSchemes(data.schemes);
-        localStorage.setItem('sahaaya_schemes', JSON.stringify(data.schemes));
-      }
-    } catch (err) {
-      console.error('Scheme fetch error:', err);
-      // Keep mock data schemes as fallback — import from mockData
-      const { matchSchemes: localMatch } = await import('@/data/mockData');
-      setMatchedSchemes(localMatch(u) as any);
-    } finally {
-      setLoadingSchemes(false);
-    }
-  };
-
-  // Fetch real jobs when Jobs tab is opened
-  useEffect(() => {
-    if (activeTab !== 'jobs' || !user) return;
-    setLoadingJobs(true);
-    fetch(`${API_URL}/api/jobs?district=${encodeURIComponent(user.district || '')}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.jobs?.length > 0) setJobs(data.jobs);
-      })
-      .catch(() => {}) // keep mock data on error
-      .finally(() => setLoadingJobs(false));
-  }, [activeTab, user]);
-
-  // Fetch real aid centers when Aid tab is opened
-  useEffect(() => {
-    if (activeTab !== 'aid' || !user) return;
-    setLoadingAid(true);
-    fetch(`${API_URL}/api/aid-centers?district=${encodeURIComponent(user.district || '')}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && data.centers?.length > 0) setAidCenters(data.centers);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingAid(false));
-  }, [activeTab, user]);
-
-  const filteredSchemes = matchedSchemes.filter(s => {
-    if (schemeFilter === 'all') return true;
-    if (schemeFilter === 'central') return s.is_central;
-    return s.category === schemeFilter;
-  });
-
-  const downloadQR = () => {
-    const svg = qrRef.current?.querySelector('svg');
-    if (!svg) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = 400; canvas.height = 400;
-    const ctx = canvas.getContext('2d');
-    const data = new XMLSerializer().serializeToString(svg);
-    const img = new Image();
-    img.onload = () => {
-      ctx?.drawImage(img, 0, 0, 400, 400);
-      const a = document.createElement('a');
-      a.download = `sahaaya-${user?.id || 'qr'}.png`;
-      a.href = canvas.toDataURL('image/png');
-      a.click();
+    const rawProfile = {
+      name:           answers.name || 'User',
+      district:       answers.location?.split(',')[0]?.trim() || answers.location || '',
+      state:          answers.location?.split(',')[1]?.trim() || '',
+      occupation:     answers.occupation || '',
+      family_size:    parseInt(answers.family_size) || 4,
+      monthly_income: parseInt(answers.monthly_income?.replace(/[^\d]/g, '')) || 10000,
+      has_disability: /हाँ|हां|yes|ha|ஆம்|అవును|হ্যাঁ|होय/i.test(answers.has_disability || ''),
+      has_bpl_card:   /हाँ|हां|yes|ha|ஆம்|అవును|হ্যাঁ|होय/i.test(answers.has_bpl_card || ''),
+      language:       lang,
     };
-    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(data)));
+
+    (async () => {
+      try {
+        // Save user to Supabase via backend
+        const saveRes  = await fetch(`${API_URL}/api/users`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile: rawProfile }),
+        });
+        const saveData = await saveRes.json();
+        const userId   = saveData.success && saveData.user?.id ? saveData.user.id : crypto.randomUUID();
+
+        // Match schemes
+        const matchRes  = await fetch(`${API_URL}/api/match-schemes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile: rawProfile }),
+        });
+        const matchData = await matchRes.json();
+        const schemes   = matchData.success ? matchData.schemes : [];
+
+        const fullProfile = {
+          ...rawProfile,
+          id: userId,
+          created_at: new Date().toISOString(),
+          schemes_matched: schemes.length,
+        };
+        localStorage.setItem('sahaaya_user',    JSON.stringify(fullProfile));
+        localStorage.setItem('sahaaya_schemes', JSON.stringify(schemes));
+      } catch {
+        // Offline fallback — save locally
+        const fallback = {
+          ...rawProfile,
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          schemes_matched: 0,
+        };
+        localStorage.setItem('sahaaya_user', JSON.stringify(fallback));
+      } finally {
+        setTimeout(() => navigate('/profile'), 1500);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isComplete]);
+
+  // Save progress locally as user answers
+  useEffect(() => {
+    if (Object.keys(answers).length > 0) {
+      localStorage.setItem('sahaaya_progress', JSON.stringify({ step, answers }));
+    }
+  }, [step, answers]);
+
+  const handleMicTap = () => {
+    if (isListening) {
+      stopListening();
+      if (transcript) submitAnswer(transcript);
+    } else {
+      askCurrentQuestion().then(() => setTimeout(startListening, 500));
+    }
   };
 
-  if (!user) return null;
+  const handleTextSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (textInput.trim()) { submitAnswer(textInput.trim()); setTextInput(''); }
+  };
 
-  const initials = user.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2);
-  const qrData = `${window.location.origin}/verify/${user.id}`;
+  // ── Loading screen ────────────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            className="w-20 h-20 border-4 border-primary/20 border-t-primary rounded-full mx-auto mb-6"
+          />
+          <h2 className="text-2xl font-bold text-secondary mb-2">{t.profileCreating}</h2>
+          <p className="text-muted-foreground">{t.profileCreatingDesc}</p>
+        </motion.div>
+      </div>
+    );
+  }
 
-  const TABS: { key: TabKey; label: string }[] = [
-    { key: 'schemes', label: t.schemes },
-    { key: 'jobs', label: t.jobsTab },
-    { key: 'aid', label: t.aidCenters },
-  ];
-
-  const SCHEME_FILTERS: { key: SchemeFilter; label: string }[] = [
-    { key: 'all', label: t.all },
-    { key: 'central', label: t.central },
-    { key: 'food', label: t.food },
-    { key: 'housing', label: t.housing },
-    { key: 'health', label: t.health },
-    { key: 'education', label: t.education },
-    { key: 'employment', label: t.jobs },
-  ];
-
+  // ── Main registration UI ──────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background pb-8">
-      <div className="bg-secondary text-secondary-foreground">
-        <div className="container py-6">
-          <button onClick={() => navigate('/')} className="text-secondary-foreground/70 text-sm mb-4 flex items-center gap-1 hover:text-secondary-foreground">
-            <ChevronLeft className="w-4 h-4" /> {t.back}
-          </button>
-          <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-xl font-bold shrink-0">{initials}</div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold truncate">{user.name}</h1>
-              <p className="text-secondary-foreground/70 flex items-center gap-1 text-sm">
-                <MapPin className="w-3 h-3" /> {user.district}, {user.state}
-              </p>
-              <p className="text-secondary-foreground/70 text-xs mt-1">ID: {user.id?.slice(0, 8)}</p>
-            </div>
-          </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="container py-4 flex items-center justify-between">
+        <button onClick={() => navigate('/')} className="text-sm text-muted-foreground hover:text-foreground">
+          ← {t.back}
+        </button>
+        <span className="text-sm font-medium text-secondary">Sahaaya AI</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="container mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-muted-foreground">
+            {t.question} {step + 1} {t.of} {totalQuestions}
+          </span>
+          <span className="text-sm font-medium text-secondary">
+            {Math.round(((step + 1) / totalQuestions) * 100)}%
+          </span>
+        </div>
+        <div className="h-2 bg-muted rounded-full overflow-hidden">
+          <motion.div
+            className="h-full bg-primary rounded-full"
+            initial={{ width: 0 }}
+            animate={{ width: `${((step + 1) / totalQuestions) * 100}%` }}
+            transition={{ duration: 0.4 }}
+          />
         </div>
       </div>
 
-      <div className="container mt-6 grid md:grid-cols-[280px_1fr] gap-6">
-        {/* QR Card */}
-        <div className="bg-card rounded-card p-6 shadow-card self-start">
-          <h3 className="font-semibold text-secondary mb-3 text-center">{t.yourQRCode}</h3>
-          <div ref={qrRef} className="flex justify-center mb-3">
-            <QRCodeSVG value={qrData} size={180} bgColor="#FFFFFF" fgColor="#1B4332" level="M" />
-          </div>
-          <p className="text-xs text-muted-foreground text-center mb-3">
-            {user.name} • {user.district}<br />
-            {matchedSchemes.length} {t.schemesMatched}
-          </p>
-          <button onClick={downloadQR} className="w-full bg-secondary text-secondary-foreground py-2 rounded-button text-sm font-medium flex items-center justify-center gap-2 hover:opacity-90 transition">
-            <Download className="w-4 h-4" /> {t.downloadQR}
-          </button>
-          <div className="mt-4 space-y-2 text-xs text-muted-foreground">
-            <div className="flex justify-between"><span>{t.family}</span><span className="font-medium text-foreground">{user.family_size} {t.members}</span></div>
-            <div className="flex justify-between"><span>{t.income}</span><span className="font-medium text-foreground">₹{user.monthly_income?.toLocaleString('en-IN')}{t.perMonth}</span></div>
-            <div className="flex justify-between"><span>{t.bplCard}</span><span className="font-medium text-foreground">{user.has_bpl_card ? t.yes : t.no}</span></div>
-            <div className="flex justify-between"><span>{t.disability}</span><span className="font-medium text-foreground">{user.has_disability ? t.yes : t.no}</span></div>
-          </div>
-        </div>
+      <div className="container flex-1 flex flex-col items-center justify-center max-w-lg mx-auto">
+        {/* Question */}
+        <AnimatePresence mode="wait">
+          <motion.div key={step}
+            initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }}
+            className="text-center mb-8 w-full">
+            <h2 className="text-2xl md:text-3xl font-bold text-secondary mb-2">{currentQuestion.text}</h2>
+          </motion.div>
+        </AnimatePresence>
 
-        <div>
-          <div className="flex gap-1 bg-muted p-1 rounded-card mb-6">
-            {TABS.map(tab => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 py-2.5 px-3 rounded-button text-sm font-medium transition-all ${
-                  activeTab === tab.key ? 'bg-secondary text-secondary-foreground shadow-warm' : 'text-muted-foreground hover:text-foreground'
-                }`}>{tab.label}</button>
-            ))}
-          </div>
-
-          {/* SCHEMES TAB */}
-          {activeTab === 'schemes' && (
-            <div>
-              <div className="flex gap-2 overflow-x-auto pb-3 mb-4 scrollbar-none">
-                {SCHEME_FILTERS.map(f => (
-                  <button key={f.key} onClick={() => setSchemeFilter(f.key)}
-                    className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                      schemeFilter === f.key ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground border border-border hover:border-primary/30'
-                    }`}>{f.label}</button>
-                ))}
-              </div>
-
-              {loadingSchemes ? (
-                <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm">{user.language === 'hi' ? 'योजनाएं खोज रहे हैं...' : 'Finding schemes...'}</span>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {filteredSchemes.map((s, i) => {
-                    const Icon = CATEGORY_ICONS[s.category] || Briefcase;
-                    // Support both name_hi/name_en (backend) and name_hi/name_en (mock)
-                    const nameHi = (s as any).name_hindi || (s as any).name_hi || s.name_en || '';
-                    const nameEn = (s as any).name_english || (s as any).name_en || '';
-                    return (
-                      <motion.div key={s.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.05 }} whileHover={{ y: -2 }} className="bg-card rounded-card p-4 shadow-card">
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                            <Icon className="w-5 h-5 text-primary" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-semibold text-secondary text-sm">{nameHi}</h4>
-                              <span className="bg-success/10 text-success text-[10px] px-2 py-0.5 rounded-full font-medium">{t.eligible} ✓</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mb-1">{nameEn} • {s.ministry}</p>
-                            <p className="text-xs text-foreground/80 mb-2">{s.description}</p>
-                            {(s as any).match_reason && (
-                              <p className="text-xs text-primary/80 mb-2 italic">{(s as any).match_reason}</p>
-                            )}
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-bold text-primary tabular-nums">{s.benefit_amount}</span>
-                              <a href={s.apply_url} target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 bg-primary text-primary-foreground px-3 py-1.5 rounded-button text-xs font-medium hover:opacity-90 transition">
-                                {t.applyNow} <ExternalLink className="w-3 h-3" />
-                              </a>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                  {filteredSchemes.length === 0 && (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <Filter className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p>{t.noSchemesFound}</p>
-                    </div>
-                  )}
-                </div>
+        {/* Mic button */}
+        {!showTextForm && (
+          <div className="flex flex-col items-center mb-8">
+            <div className="relative">
+              {isListening && (
+                <>
+                  <motion.div className="absolute inset-0 rounded-full bg-primary/20"
+                    animate={{ scale: [1, 1.5], opacity: [0.5, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }} />
+                  <motion.div className="absolute inset-0 rounded-full bg-primary/10"
+                    animate={{ scale: [1, 2], opacity: [0.3, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }} />
+                </>
               )}
+              <motion.button whileTap={{ scale: 0.9 }} onClick={handleMicTap} disabled={isSpeaking}
+                className={`relative z-10 w-32 h-32 md:w-40 md:h-40 rounded-full flex items-center justify-center transition-colors ${
+                  isListening
+                    ? 'bg-destructive shadow-lg'
+                    : isSpeaking
+                    ? 'bg-muted cursor-wait'
+                    : 'bg-primary shadow-primary-glow'
+                }`}>
+                {isListening
+                  ? <MicOff className="w-12 h-12 text-destructive-foreground" />
+                  : <Mic    className="w-12 h-12 text-primary-foreground" />}
+              </motion.button>
             </div>
-          )}
+            <p className="mt-4 text-sm text-muted-foreground">
+              {isListening ? t.listening : isSpeaking ? t.speaking : t.tapToSpeak}
+            </p>
+          </div>
+        )}
 
-          {/* JOBS TAB */}
-          {activeTab === 'jobs' && (
-            <div>
-              {loadingJobs && (
-                <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground mb-4">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">Loading jobs...</span>
-                </div>
-              )}
-              <div className="space-y-3 mb-6">
-                {jobs.map((j, i) => (
-                  <motion.div key={j.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }} className="bg-card rounded-card p-4 shadow-card">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h4 className="font-semibold text-secondary text-sm">{j.title}</h4>
-                        <p className="text-xs text-muted-foreground">{j.employer_name} • {j.district}, {j.state}</p>
-                      </div>
-                      <span className="bg-success/10 text-success text-sm font-bold px-3 py-1 rounded-full tabular-nums">₹{j.daily_wage}/day</span>
-                    </div>
-                    <p className="text-xs text-foreground/80 mb-3">{j.description}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs bg-muted px-2 py-1 rounded-full text-muted-foreground">{j.sector}</span>
-                      <a href={`tel:${j.contact_number}`} className="inline-flex items-center gap-1 bg-secondary text-secondary-foreground px-3 py-1.5 rounded-button text-xs font-medium">
-                        <Phone className="w-3 h-3" /> {t.callEmployer}
-                      </a>
-                    </div>
-                  </motion.div>
-                ))}
+        {/* Transcript confirm */}
+        {transcript && !showTextForm && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="bg-card rounded-card p-4 shadow-card mb-4 w-full text-center">
+            <p className="text-lg text-foreground italic">"{transcript}"</p>
+            {!isListening && (
+              <div className="flex gap-2 justify-center mt-3">
+                <button onClick={() => submitAnswer(transcript)}
+                  className="bg-primary text-primary-foreground px-4 py-2 rounded-button text-sm font-medium flex items-center gap-1">
+                  <Check className="w-4 h-4" /> {t.confirm}
+                </button>
+                <button onClick={startListening}
+                  className="bg-muted text-foreground px-4 py-2 rounded-button text-sm font-medium">
+                  {t.retry}
+                </button>
               </div>
-              <div className="rounded-card overflow-hidden shadow-card" style={{ height: 300 }}>
-                <MapView markers={jobs.filter((j: any) => j.lat && j.lng).map((j: any) => ({ lat: j.lat, lng: j.lng, label: `${j.title} - ₹${j.daily_wage}/day` }))} center={[22, 78]} zoom={5} />
-              </div>
-            </div>
-          )}
+            )}
+          </motion.div>
+        )}
 
-          {/* AID CENTERS TAB */}
-          {activeTab === 'aid' && (
-            <div>
-              {loadingAid && (
-                <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground mb-4">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">Loading aid centers...</span>
-                </div>
-              )}
-              <div className="space-y-3 mb-6">
-                {aidCenters.map((a, i) => (
-                  <motion.div key={a.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }} className="bg-card rounded-card p-4 shadow-card">
-                    <h4 className="font-semibold text-secondary text-sm mb-1">{a.name}</h4>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-                      <MapPin className="w-3 h-3" /> {a.address}
-                    </p>
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {a.services.map((s: string) => (
-                        <span key={s} className="bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded-full font-medium">{s}</span>
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>🕐 {a.timing}</span>
-                      <a href={`tel:${a.contact}`} className="text-primary font-medium flex items-center gap-1">
-                        <Phone className="w-3 h-3" /> {a.contact}
-                      </a>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-              <div className="rounded-card overflow-hidden shadow-card" style={{ height: 300 }}>
-                <MapView markers={aidCenters.map((a: AidCenter) => ({ lat: a.lat, lng: a.lng, label: a.name }))} center={[22, 78]} zoom={5} />
-              </div>
+        {/* Text input fallback */}
+        {showTextForm && (
+          <form onSubmit={handleTextSubmit} className="w-full mb-8">
+            <div className="flex gap-2">
+              <input
+                type={currentQuestion.type === 'number' ? 'number' : 'text'}
+                value={textInput}
+                onChange={e => setTextInput(e.target.value)}
+                placeholder={currentQuestion.text}
+                autoFocus
+                className="flex-1 bg-card border border-border rounded-button px-4 py-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <button type="submit" className="bg-primary text-primary-foreground px-4 py-3 rounded-button">
+                <ArrowRight className="w-5 h-5" />
+              </button>
             </div>
-          )}
-        </div>
+          </form>
+        )}
+
+        {/* Toggle voice/text */}
+        <button onClick={() => setShowTextForm(!showTextForm)}
+          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <Keyboard className="w-4 h-4" />
+          {showTextForm ? t.useVoice : t.typeInstead}
+        </button>
+
+        {/* Error */}
+        {error && (
+          <div className="mt-4 bg-destructive/10 text-destructive px-4 py-3 rounded-button text-sm text-center">
+            {error}
+          </div>
+        )}
+
+        {/* Answers so far */}
+        {Object.keys(answers).length > 0 && (
+          <div className="mt-8 w-full">
+            <p className="text-xs text-muted-foreground mb-2">{t.yourAnswers}:</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(answers).map(([key, val]) => (
+                <span key={key} className="bg-success/10 text-success text-xs px-3 py-1 rounded-full">{val}</span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-export default Profile;
+export default Register;

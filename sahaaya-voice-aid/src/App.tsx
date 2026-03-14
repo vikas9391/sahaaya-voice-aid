@@ -11,6 +11,8 @@ import Verify from "./pages/Verify";
 import Admin from "./pages/Admin";
 import PostJob from "./pages/PostJob";
 import NotFound from "./pages/NotFound";
+import Login from '@/pages/Login';
+
 
 const queryClient = new QueryClient();
 
@@ -29,6 +31,8 @@ const App = () => (
             <Route path="/admin" element={<Admin />} />
             <Route path="/post-job" element={<PostJob />} />
             <Route path="*" element={<NotFound />} />
+            <Route path="/login" element={<Login />} />
+
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
