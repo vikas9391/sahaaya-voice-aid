@@ -37,6 +37,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Welcome Bot - auto-launches */}
+      <WelcomeBot />
       {/* Nav */}
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="container flex items-center justify-between h-16">
